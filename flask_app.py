@@ -11,7 +11,12 @@ BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 TEMPLATES_DIR = os.path.join(BASE_DIR, "templates")
 STATIC_DIR = os.path.join(BASE_DIR, "static")
 
-app = Flask(__name__, template_folder=TEMPLATES_DIR, static_folder=STATIC_DIR)
+app = Flask(
+    __name__,
+    template_folder=TEMPLATES_DIR,
+    static_folder=STATIC_DIR,
+    static_url_path="/static"
+)
 
 # Load Trained Model
 MODEL_PATH = os.path.join(BASE_DIR, "xgboost_ckd_model.pkl")
@@ -24,7 +29,11 @@ try:
 except Exception as e:
     print(f"[WARN] Error loading model: {e}")
 
-from rule_based import rule_based_ckd_predict
+try:
+    from rule_based import rule_based_ckd_predict
+except ImportError:
+    def rule_based_ckd_predict(data):
+        return "Rule-based logic not available"
 
 FEATURE_NAMES = [
     'age', 'bp', 'sg', 'al', 'su', 'rbc', 'pc', 'pcc', 'ba',
@@ -32,22 +41,62 @@ FEATURE_NAMES = [
     'cad', 'appet', 'pe', 'ane'
 ]
 
+DEFAULTS = {
+    'age': 48.0, 'bp': 80.0, 'sg': 1.020, 'al': 0, 'su': 0,
+    'rbc': 0, 'pc': 0, 'pcc': 0, 'ba': 0, 'bu': 36.0,
+    'sc': 1.2, 'sod': 135.0, 'pot': 4.5, 'hemo': 15.4, 'wc': 8000.0,
+    'htn': 0, 'dm': 0, 'cad': 0, 'appet': 1, 'pe': 0, 'ane': 0
+}
+
 def analyze_biomarkers(data: dict):
     insights = []
-    if float(data.get("sc", 0)) > 1.4:
-        insights.append(f"Elevated Serum Creatinine ({data['sc']} mg/dL) indicating impaired glomerular filtration.")
-    if float(data.get("bu", 0)) > 40:
-        insights.append(f"Elevated Blood Urea ({data['bu']} mg/dL) indicating nitrogenous waste retention.")
-    if int(data.get("al", 0)) >= 1:
-        insights.append(f"Albuminuria detected (Grade {data['al']}) suggesting renal filter permeability compromise.")
-    if float(data.get("hemo", 15)) < 11.5:
-        insights.append(f"Low Hemoglobin ({data['hemo']} g/dL) suggestive of secondary renal anemia.")
-    if int(data.get("htn", 0)) == 1:
-        insights.append("Hypertension recorded: major risk factor accelerating nephrosclerosis.")
-    if int(data.get("dm", 0)) == 1:
-        insights.append("Diabetes Mellitus recorded: major risk factor for diabetic nephropathy.")
-    if float(data.get("sg", 1.020)) < 1.015:
-        insights.append(f"Low Specific Gravity ({data['sg']}) reflecting impaired tubular concentration.")
+    try:
+        sc = float(data.get("sc", DEFAULTS["sc"]))
+        if sc > 1.4:
+            insights.append(f"Elevated Serum Creatinine ({sc} mg/dL) indicating impaired glomerular filtration.")
+    except (ValueError, TypeError):
+        pass
+
+    try:
+        bu = float(data.get("bu", DEFAULTS["bu"]))
+        if bu > 40:
+            insights.append(f"Elevated Blood Urea ({bu} mg/dL) indicating nitrogenous waste retention.")
+    except (ValueError, TypeError):
+        pass
+
+    try:
+        al = int(float(data.get("al", DEFAULTS["al"])))
+        if al >= 1:
+            insights.append(f"Albuminuria detected (Grade {al}) suggesting renal filter permeability compromise.")
+    except (ValueError, TypeError):
+        pass
+
+    try:
+        hemo = float(data.get("hemo", DEFAULTS["hemo"]))
+        if hemo < 11.5:
+            insights.append(f"Low Hemoglobin ({hemo} g/dL) suggestive of secondary renal anemia.")
+    except (ValueError, TypeError):
+        pass
+
+    try:
+        if int(float(data.get("htn", 0))) == 1:
+            insights.append("Hypertension recorded: major risk factor accelerating nephrosclerosis.")
+    except (ValueError, TypeError):
+        pass
+
+    try:
+        if int(float(data.get("dm", 0))) == 1:
+            insights.append("Diabetes Mellitus recorded: major risk factor for diabetic nephropathy.")
+    except (ValueError, TypeError):
+        pass
+
+    try:
+        sg = float(data.get("sg", DEFAULTS["sg"]))
+        if sg < 1.015:
+            insights.append(f"Low Specific Gravity ({sg}) reflecting impaired tubular concentration.")
+    except (ValueError, TypeError):
+        pass
+
     if not insights:
         insights.append("All key physiological biomarkers fall within standard reference intervals.")
     return insights
@@ -86,11 +135,20 @@ def sample(sample_type):
 @app.route("/api/predict", methods=["POST"])
 def predict():
     if model is None:
-        return jsonify({"error": "Model not loaded"}), 500
+        return jsonify({"error": "Model not loaded on server", "status": "error"}), 500
 
     try:
-        data = request.get_json(force=True)
-        input_df = pd.DataFrame([data])[FEATURE_NAMES]
+        raw_data = request.get_json(force=True, silent=True) or {}
+        
+        # Build clean numerical payload with defaults
+        payload = {}
+        for feat in FEATURE_NAMES:
+            val = raw_data.get(feat)
+            if val is None or val == "":
+                val = DEFAULTS.get(feat, 0)
+            payload[feat] = float(val)
+
+        input_df = pd.DataFrame([payload])[FEATURE_NAMES]
 
         prediction = model.predict(input_df)[0]
         probabilities = model.predict_proba(input_df)[0]
@@ -101,7 +159,7 @@ def predict():
 
         risk_level = "High" if ckd_prob >= 0.70 else ("Moderate" if ckd_prob >= 0.35 else "Low")
         confidence = round((ckd_prob if is_ckd else no_ckd_prob) * 100, 2)
-        insights = analyze_biomarkers(data)
+        insights = analyze_biomarkers(payload)
 
         return jsonify({
             "status": "success",
@@ -112,17 +170,24 @@ def predict():
             "no_ckd_probability": round(no_ckd_prob, 4),
             "confidence_percentage": confidence,
             "biomarker_insights": insights,
-            "patient_parameters": data
+            "patient_parameters": payload
         })
     except Exception as e:
-        return jsonify({"error": str(e)}), 500
+        return jsonify({"error": str(e), "status": "error"}), 500
 
 @app.route("/api/rule-based", methods=["POST"])
 def rule_based():
     try:
-        data = request.get_json(force=True)
-        assessment = rule_based_ckd_predict(data)
-        insights = analyze_biomarkers(data)
+        raw_data = request.get_json(force=True, silent=True) or {}
+        payload = {}
+        for feat in FEATURE_NAMES:
+            val = raw_data.get(feat)
+            if val is None or val == "":
+                val = DEFAULTS.get(feat, 0)
+            payload[feat] = float(val)
+
+        assessment = rule_based_ckd_predict(payload)
+        insights = analyze_biomarkers(payload)
         return jsonify({
             "status": "success",
             "method": "Rule-Based Expert System (WHO Guidelines)",
@@ -130,7 +195,7 @@ def rule_based():
             "biomarker_insights": insights
         })
     except Exception as e:
-        return jsonify({"error": str(e)}), 500
+        return jsonify({"error": str(e), "status": "error"}), 500
 
 @app.route("/api/predict/batch", methods=["POST"])
 def batch_predict():
@@ -175,4 +240,5 @@ def batch_predict():
         return jsonify({"error": str(e)}), 500
 
 if __name__ == "__main__":
-    app.run(host="127.0.0.1", port=5000, debug=True)
+    print("Serving Flask app on http://127.0.0.1:5000 ...")
+    app.run(host="127.0.0.1", port=5000, debug=False)

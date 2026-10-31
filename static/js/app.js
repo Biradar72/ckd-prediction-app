@@ -274,3 +274,4 @@ document.addEventListener('DOMContentLoaded', () => {
     batchResults.innerHTML = html;
   }
 });
+

@@ -59,57 +59,86 @@ FEATURE_NAMES = [
     'cad', 'appet', 'pe', 'ane'
 ]
 
+DEFAULTS = {
+    'age': 48.0, 'bp': 80.0, 'sg': 1.020, 'al': 0, 'su': 0,
+    'rbc': 0, 'pc': 0, 'pcc': 0, 'ba': 0, 'bu': 36.0,
+    'sc': 1.2, 'sod': 135.0, 'pot': 4.5, 'hemo': 15.4, 'wc': 8000.0,
+    'htn': 0, 'dm': 0, 'cad': 0, 'appet': 1, 'pe': 0, 'ane': 0
+}
+
 # Pydantic Patient Schema
 class PatientData(BaseModel):
-    age: float = Field(48.0, ge=1, le=120, description="Age in years")
-    bp: float = Field(80.0, ge=40, le=250, description="Blood Pressure in mm/Hg")
-    sg: float = Field(1.020, ge=1.000, le=1.040, description="Specific Gravity")
-    al: int = Field(0, ge=0, le=5, description="Albumin (0 to 5)")
-    su: int = Field(0, ge=0, le=5, description="Sugar (0 to 5)")
-    rbc: int = Field(0, ge=0, le=1, description="Red Blood Cells: 0=Normal, 1=Abnormal")
-    pc: int = Field(0, ge=0, le=1, description="Pus Cells: 0=Normal, 1=Abnormal")
-    pcc: int = Field(0, ge=0, le=1, description="Pus Cell Clumps: 0=Not Present, 1=Present")
-    ba: int = Field(0, ge=0, le=1, description="Bacteria: 0=Not Present, 1=Present")
-    bu: float = Field(36.0, ge=1, le=500, description="Blood Urea (mg/dL)")
-    sc: float = Field(1.2, ge=0.1, le=25.0, description="Serum Creatinine (mg/dL)")
-    sod: float = Field(135.0, ge=50, le=200, description="Sodium (mEq/L)")
-    pot: float = Field(4.5, ge=1.0, le=15.0, description="Potassium (mEq/L)")
-    hemo: float = Field(15.4, ge=2.0, le=22.0, description="Hemoglobin (g/dL)")
-    wc: float = Field(8000.0, ge=1000, le=50000, description="White Blood Cell Count (/cu.mm)")
-    htn: int = Field(0, ge=0, le=1, description="Hypertension: 0=No, 1=Yes")
-    dm: int = Field(0, ge=0, le=1, description="Diabetes Mellitus: 0=No, 1=Yes")
-    cad: int = Field(0, ge=0, le=1, description="Coronary Artery Disease: 0=No, 1=Yes")
-    appet: int = Field(1, ge=0, le=1, description="Appetite: 0=Poor, 1=Good")
-    pe: int = Field(0, ge=0, le=1, description="Pedal Edema: 0=No, 1=Yes")
-    ane: int = Field(0, ge=0, le=1, description="Anemia: 0=No, 1=Yes")
-
-    class Config:
-        json_schema_extra = {
-            "example": {
-                "age": 48, "bp": 80, "sg": 1.020, "al": 1, "su": 0,
-                "rbc": 0, "pc": 0, "pcc": 0, "ba": 0, "bu": 36,
-                "sc": 1.2, "sod": 135, "pot": 4.5, "hemo": 15.4, "wc": 8000,
-                "htn": 1, "dm": 0, "cad": 0, "appet": 1, "pe": 0, "ane": 0
-            }
-        }
+    age: Optional[float] = Field(48.0, ge=1, le=120)
+    bp: Optional[float] = Field(80.0, ge=40, le=250)
+    sg: Optional[float] = Field(1.020, ge=1.000, le=1.040)
+    al: Optional[int] = Field(0, ge=0, le=5)
+    su: Optional[int] = Field(0, ge=0, le=5)
+    rbc: Optional[int] = Field(0, ge=0, le=1)
+    pc: Optional[int] = Field(0, ge=0, le=1)
+    pcc: Optional[int] = Field(0, ge=0, le=1)
+    ba: Optional[int] = Field(0, ge=0, le=1)
+    bu: Optional[float] = Field(36.0, ge=1, le=500)
+    sc: Optional[float] = Field(1.2, ge=0.1, le=25.0)
+    sod: Optional[float] = Field(135.0, ge=50, le=200)
+    pot: Optional[float] = Field(4.5, ge=1.0, le=15.0)
+    hemo: Optional[float] = Field(15.4, ge=2.0, le=22.0)
+    wc: Optional[float] = Field(8000.0, ge=1000, le=50000)
+    htn: Optional[int] = Field(0, ge=0, le=1)
+    dm: Optional[int] = Field(0, ge=0, le=1)
+    cad: Optional[int] = Field(0, ge=0, le=1)
+    appet: Optional[int] = Field(1, ge=0, le=1)
+    pe: Optional[int] = Field(0, ge=0, le=1)
+    ane: Optional[int] = Field(0, ge=0, le=1)
 
 def analyze_biomarkers(data: dict) -> List[str]:
-    """Provides clinical biomarker findings for decision support."""
     insights = []
-    if data.get("sc", 0) > 1.4:
-        insights.append(f"Elevated Serum Creatinine ({data['sc']} mg/dL) indicating impaired glomerular filtration.")
-    if data.get("bu", 0) > 40:
-        insights.append(f"Elevated Blood Urea ({data['bu']} mg/dL) indicating nitrogenous waste retention.")
-    if data.get("al", 0) >= 1:
-        insights.append(f"Albuminuria detected (Grade {data['al']}) suggesting renal filter permeability compromise.")
-    if data.get("hemo", 15) < 11.5:
-        insights.append(f"Low Hemoglobin ({data['hemo']} g/dL) suggestive of secondary renal anemia.")
-    if data.get("htn", 0) == 1:
-        insights.append("Hypertension recorded: major risk factor accelerating nephrosclerosis.")
-    if data.get("dm", 0) == 1:
-        insights.append("Diabetes Mellitus recorded: major risk factor for diabetic nephropathy.")
-    if data.get("sg", 1.020) < 1.015:
-        insights.append(f"Low Specific Gravity ({data['sg']}) reflecting impaired tubular concentration.")
+    try:
+        sc = float(data.get("sc", DEFAULTS["sc"]))
+        if sc > 1.4:
+            insights.append(f"Elevated Serum Creatinine ({sc} mg/dL) indicating impaired glomerular filtration.")
+    except (ValueError, TypeError):
+        pass
+
+    try:
+        bu = float(data.get("bu", DEFAULTS["bu"]))
+        if bu > 40:
+            insights.append(f"Elevated Blood Urea ({bu} mg/dL) indicating nitrogenous waste retention.")
+    except (ValueError, TypeError):
+        pass
+
+    try:
+        al = int(float(data.get("al", DEFAULTS["al"])))
+        if al >= 1:
+            insights.append(f"Albuminuria detected (Grade {al}) suggesting renal filter permeability compromise.")
+    except (ValueError, TypeError):
+        pass
+
+    try:
+        hemo = float(data.get("hemo", DEFAULTS["hemo"]))
+        if hemo < 11.5:
+            insights.append(f"Low Hemoglobin ({hemo} g/dL) suggestive of secondary renal anemia.")
+    except (ValueError, TypeError):
+        pass
+
+    try:
+        if int(float(data.get("htn", 0))) == 1:
+            insights.append("Hypertension recorded: major risk factor accelerating nephrosclerosis.")
+    except (ValueError, TypeError):
+        pass
+
+    try:
+        if int(float(data.get("dm", 0))) == 1:
+            insights.append("Diabetes Mellitus recorded: major risk factor for diabetic nephropathy.")
+    except (ValueError, TypeError):
+        pass
+
+    try:
+        sg = float(data.get("sg", DEFAULTS["sg"]))
+        if sg < 1.015:
+            insights.append(f"Low Specific Gravity ({sg}) reflecting impaired tubular concentration.")
+    except (ValueError, TypeError):
+        pass
+
     if not insights:
         insights.append("All key physiological biomarkers fall within standard reference intervals.")
     return insights
@@ -172,8 +201,15 @@ async def predict_ckd(patient: PatientData):
         raise HTTPException(status_code=500, detail="Machine Learning model is not loaded.")
 
     try:
-        data_dict = patient.model_dump()
-        input_df = pd.DataFrame([data_dict])[FEATURE_NAMES]
+        raw_dict = patient.model_dump()
+        payload = {}
+        for feat in FEATURE_NAMES:
+            val = raw_dict.get(feat)
+            if val is None or val == "":
+                val = DEFAULTS.get(feat, 0)
+            payload[feat] = float(val)
+
+        input_df = pd.DataFrame([payload])[FEATURE_NAMES]
 
         prediction = model.predict(input_df)[0]
         probabilities = model.predict_proba(input_df)[0]
@@ -192,7 +228,7 @@ async def predict_ckd(patient: PatientData):
             risk_level = "Low"
 
         confidence = round((ckd_prob if is_ckd else no_ckd_prob) * 100, 2)
-        insights = analyze_biomarkers(data_dict)
+        insights = analyze_biomarkers(payload)
 
         return {
             "status": "success",
@@ -203,7 +239,7 @@ async def predict_ckd(patient: PatientData):
             "no_ckd_probability": round(no_ckd_prob, 4),
             "confidence_percentage": confidence,
             "biomarker_insights": insights,
-            "patient_parameters": data_dict
+            "patient_parameters": payload
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Prediction error: {str(e)}")
@@ -217,9 +253,16 @@ async def rule_based_assessment(patient: PatientData):
     Evaluates patient parameters using deterministic WHO clinical guidelines.
     """
     try:
-        data_dict = patient.model_dump()
-        assessment = rule_based_ckd_predict(data_dict)
-        insights = analyze_biomarkers(data_dict)
+        raw_dict = patient.model_dump()
+        payload = {}
+        for feat in FEATURE_NAMES:
+            val = raw_dict.get(feat)
+            if val is None or val == "":
+                val = DEFAULTS.get(feat, 0)
+            payload[feat] = float(val)
+
+        assessment = rule_based_ckd_predict(payload)
+        insights = analyze_biomarkers(payload)
 
         return {
             "status": "success",
@@ -248,7 +291,6 @@ async def predict_batch_csv(file: UploadFile = File(...)):
         contents = await file.read()
         df = pd.read_csv(io.BytesIO(contents))
 
-        # Check required columns
         missing_cols = [c for c in FEATURE_NAMES if c not in df.columns]
         if missing_cols:
             raise HTTPException(
