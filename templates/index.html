@@ -1,0 +1,355 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>CKD Diagnostic Intelligence | FastAPI &amp; XGBoost</title>
+  
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🩺</text></svg>">
+  
+  <!-- Google Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,wght@0,400;0,500;0,700;1,400&family=JetBrains+Mono:wght@400;600&family=Syne:wght@600;700;800&display=swap" rel="stylesheet">
+  
+  <!-- CSS Stylesheet -->
+  <link rel="stylesheet" href="/static/css/style.css">
+  
+  <!-- Ionicons -->
+  <script type="module" src="https://unpkg.com/ionicons@7.1.0/dist/ionicons/ionicons.esm.js"></script>
+  <script nomodule src="https://unpkg.com/ionicons@7.1.0/dist/ionicons/ionicons.js"></script>
+</head>
+<body>
+
+  <!-- Top App Bar -->
+  <header class="app-header">
+    <div class="header-container">
+      <div class="brand">
+        <div class="brand-icon"><ion-icon name="pulse"></ion-icon></div>
+        <div>
+          <h1 class="brand-title">CKD Expert System</h1>
+          <p class="brand-subtitle">Clinical Decision Support &bull; XGBoost &amp; WHO Rule-Based API</p>
+        </div>
+      </div>
+      
+      <div class="header-links">
+        <a href="/docs" target="_blank" class="nav-pill" title="FastAPI Swagger Documentation">
+          <ion-icon name="code-slash-outline"></ion-icon> Swagger API Docs
+        </a>
+        <a href="/redoc" target="_blank" class="nav-pill" title="ReDoc API Specifications">
+          <ion-icon name="document-text-outline"></ion-icon> ReDoc
+        </a>
+        <a href="https://github.com/Biradar72/ckd-prediction-app" target="_blank" class="nav-pill" title="GitHub Repository">
+          <ion-icon name="logo-github"></ion-icon> GitHub Repo
+        </a>
+      </div>
+    </div>
+  </header>
+
+  <!-- Main Container -->
+  <main class="main-container">
+    
+    <!-- Top Action Banner -->
+    <div class="action-banner">
+      <div class="mode-selector">
+        <label class="mode-label">Diagnostic Engine:</label>
+        <div class="radio-group">
+          <label class="radio-tab active" id="tabML">
+            <input type="radio" name="engineMode" value="ml" checked>
+            <ion-icon name="hardware-chip-outline"></ion-icon> Machine Learning (XGBoost)
+          </label>
+          <label class="radio-tab" id="tabRule">
+            <input type="radio" name="engineMode" value="rule">
+            <ion-icon name="shield-checkmark-outline"></ion-icon> Rule-Based (WHO Logic)
+          </label>
+        </div>
+      </div>
+
+      <div class="sample-loader">
+        <span class="sample-label">1-Click Test Data:</span>
+        <button type="button" class="btn btn-sm btn-sample" id="btnSampleHealthy">
+          <ion-icon name="checkmark-circle-outline"></ion-icon> Healthy Patient
+        </button>
+        <button type="button" class="btn btn-sm btn-sample at-risk" id="btnSampleAtRisk">
+          <ion-icon name="alert-circle-outline"></ion-icon> At-Risk Patient
+        </button>
+        <button type="button" class="btn btn-sm btn-ghost" id="btnReset">
+          <ion-icon name="refresh-outline"></ion-icon> Reset
+        </button>
+      </div>
+    </div>
+
+    <!-- Diagnostic Grid (Form Left, Results Right) -->
+    <div class="diagnostic-grid">
+      
+      <!-- Left Column: Patient Biomarker Form -->
+      <div class="card form-card">
+        <div class="card-header">
+          <h2><ion-icon name="medical-outline"></ion-icon> Patient Biomarkers &amp; Clinical Data</h2>
+          <span class="tag">21 Clinical Parameters</span>
+        </div>
+
+        <form id="patientForm">
+
+          <!-- Section 1: Demographics & Vitals -->
+          <div class="form-section">
+            <h3 class="section-title"><ion-icon name="person-outline"></ion-icon> Vitals &amp; Demographics</h3>
+            <div class="input-grid">
+              <div class="input-group">
+                <label for="age">Age (years)</label>
+                <input type="number" id="age" name="age" min="1" max="120" value="48" required>
+              </div>
+              <div class="input-group">
+                <label for="bp">Blood Pressure (mm/Hg)</label>
+                <input type="number" id="bp" name="bp" min="40" max="250" value="80" required>
+              </div>
+              <div class="input-group">
+                <label for="sg">Specific Gravity</label>
+                <input type="number" id="sg" name="sg" step="0.005" min="1.000" max="1.035" value="1.020" required>
+              </div>
+            </div>
+          </div>
+
+          <!-- Section 2: Renal Panel & Electrolytes -->
+          <div class="form-section">
+            <h3 class="section-title"><ion-icon name="flask-outline"></ion-icon> Renal Panel &amp; Electrolytes</h3>
+            <div class="input-grid">
+              <div class="input-group">
+                <label for="sc">Serum Creatinine (mg/dL)</label>
+                <input type="number" id="sc" name="sc" step="0.1" min="0.1" max="25" value="1.2" required>
+                <span class="field-hint">Normal: 0.6 - 1.2</span>
+              </div>
+              <div class="input-group">
+                <label for="bu">Blood Urea (mg/dL)</label>
+                <input type="number" id="bu" name="bu" step="1" min="1" max="500" value="36" required>
+                <span class="field-hint">Normal: 15 - 45</span>
+              </div>
+              <div class="input-group">
+                <label for="sod">Sodium (mEq/L)</label>
+                <input type="number" id="sod" name="sod" step="1" min="50" max="200" value="135" required>
+                <span class="field-hint">Normal: 135 - 145</span>
+              </div>
+              <div class="input-group">
+                <label for="pot">Potassium (mEq/L)</label>
+                <input type="number" id="pot" name="pot" step="0.1" min="1" max="15" value="4.5" required>
+                <span class="field-hint">Normal: 3.5 - 5.0</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Section 3: Urinalysis & Hematology -->
+          <div class="form-section">
+            <h3 class="section-title"><ion-icon name="water-outline"></ion-icon> Urinalysis &amp; Blood Count</h3>
+            <div class="input-grid">
+              <div class="input-group">
+                <label for="al">Albuminuria (0 to 5)</label>
+                <select id="al" name="al">
+                  <option value="0" selected>0 (None / Normal)</option>
+                  <option value="1">1 (Microalbuminuria)</option>
+                  <option value="2">2 (Moderate)</option>
+                  <option value="3">3 (Severe)</option>
+                  <option value="4">4 (Marked)</option>
+                  <option value="5">5 (Massive)</option>
+                </select>
+              </div>
+              <div class="input-group">
+                <label for="su">Sugar (0 to 5)</label>
+                <select id="su" name="su">
+                  <option value="0" selected>0 (None)</option>
+                  <option value="1">1</option>
+                  <option value="2">2</option>
+                  <option value="3">3</option>
+                  <option value="4">4</option>
+                  <option value="5">5</option>
+                </select>
+              </div>
+              <div class="input-group">
+                <label for="hemo">Hemoglobin (g/dL)</label>
+                <input type="number" id="hemo" name="hemo" step="0.1" min="2" max="22" value="15.4" required>
+                <span class="field-hint">Normal: 13.5 - 17.5</span>
+              </div>
+              <div class="input-group">
+                <label for="wc">White Blood Cells (/cu.mm)</label>
+                <input type="number" id="wc" name="wc" step="100" min="1000" max="50000" value="8000" required>
+                <span class="field-hint">Normal: 4,500 - 11,000</span>
+              </div>
+              <div class="input-group">
+                <label for="rbc">Red Blood Cells</label>
+                <select id="rbc" name="rbc">
+                  <option value="0" selected>Normal (0)</option>
+                  <option value="1">Abnormal (1)</option>
+                </select>
+              </div>
+              <div class="input-group">
+                <label for="pc">Pus Cells</label>
+                <select id="pc" name="pc">
+                  <option value="0" selected>Normal (0)</option>
+                  <option value="1">Abnormal (1)</option>
+                </select>
+              </div>
+              <div class="input-group">
+                <label for="pcc">Pus Cell Clumps</label>
+                <select id="pcc" name="pcc">
+                  <option value="0" selected>Not Present (0)</option>
+                  <option value="1">Present (1)</option>
+                </select>
+              </div>
+              <div class="input-group">
+                <label for="ba">Bacteria</label>
+                <select id="ba" name="ba">
+                  <option value="0" selected>Not Present (0)</option>
+                  <option value="1">Present (1)</option>
+                </select>
+              </div>
+            </div>
+          </div>
+
+          <!-- Section 4: Systemic Comorbidities -->
+          <div class="form-section">
+            <h3 class="section-title"><ion-icon name="heart-outline"></ion-icon> Comorbidities &amp; Clinical History</h3>
+            <div class="input-grid">
+              <div class="input-group">
+                <label for="htn">Hypertension</label>
+                <select id="htn" name="htn">
+                  <option value="0" selected>No (0)</option>
+                  <option value="1">Yes (1)</option>
+                </select>
+              </div>
+              <div class="input-group">
+                <label for="dm">Diabetes Mellitus</label>
+                <select id="dm" name="dm">
+                  <option value="0" selected>No (0)</option>
+                  <option value="1">Yes (1)</option>
+                </select>
+              </div>
+              <div class="input-group">
+                <label for="cad">Coronary Artery Disease</label>
+                <select id="cad" name="cad">
+                  <option value="0" selected>No (0)</option>
+                  <option value="1">Yes (1)</option>
+                </select>
+              </div>
+              <div class="input-group">
+                <label for="appet">Appetite</label>
+                <select id="appet" name="appet">
+                  <option value="1" selected>Good (1)</option>
+                  <option value="0">Poor (0)</option>
+                </select>
+              </div>
+              <div class="input-group">
+                <label for="pe">Pedal Edema (Leg Swelling)</label>
+                <select id="pe" name="pe">
+                  <option value="0" selected>No (0)</option>
+                  <option value="1">Yes (1)</option>
+                </select>
+              </div>
+              <div class="input-group">
+                <label for="ane">Anemia</label>
+                <select id="ane" name="ane">
+                  <option value="0" selected>No (0)</option>
+                  <option value="1">Yes (1)</option>
+                </select>
+              </div>
+            </div>
+          </div>
+
+          <button type="submit" class="btn btn-primary btn-block" id="btnSubmit">
+            <ion-icon name="pulse-outline"></ion-icon> Run Clinical Prediction
+          </button>
+        </form>
+      </div>
+
+      <!-- Right Column: Interactive Diagnostic Results -->
+      <div class="card result-card">
+        <div class="card-header">
+          <h2><ion-icon name="analytics-outline"></ion-icon> Diagnostic Assessment</h2>
+          <span class="tag tag-live" id="statusBadge">Engine Ready</span>
+        </div>
+
+        <div id="resultPlaceholder" class="result-placeholder">
+          <div class="pulse-icon"><ion-icon name="pulse"></ion-icon></div>
+          <h3>Awaiting Patient Biomarkers</h3>
+          <p>Fill out the 21 parameters on the left or load a sample record, then click <strong>Run Clinical Prediction</strong>.</p>
+        </div>
+
+        <div id="resultContent" class="result-content" style="display: none;">
+          
+          <!-- Primary Outcome Box -->
+          <div class="outcome-box" id="outcomeBox">
+            <div class="outcome-header">
+              <span class="outcome-title" id="outcomeTitle">Diagnostic Result</span>
+              <span class="risk-badge" id="riskBadge">Low Risk</span>
+            </div>
+            <div class="outcome-main" id="outcomeMain">No CKD Detected</div>
+            <div class="outcome-prob" id="outcomeConfidence">Model Confidence: 84.2%</div>
+          </div>
+
+          <!-- Risk Meter Gauge -->
+          <div class="meter-container">
+            <div class="meter-label-flex">
+              <span>Estimated CKD Risk Probability</span>
+              <span id="meterPercent" class="meter-val">15.8%</span>
+            </div>
+            <div class="meter-bar-track">
+              <div class="meter-bar-fill" id="meterFill" style="width: 15.8%;"></div>
+            </div>
+            <div class="meter-scale">
+              <span>0% (Low)</span>
+              <span>50% (Moderate)</span>
+              <span>100% (Critical)</span>
+            </div>
+          </div>
+
+          <!-- Biomarker Insights Alert Box -->
+          <div class="insights-box">
+            <h4><ion-icon name="information-circle-outline"></ion-icon> Clinical Decision Insights</h4>
+            <ul id="insightsList" class="insights-list">
+              <li>All key physiological biomarkers fall within standard reference intervals.</li>
+            </ul>
+          </div>
+
+          <!-- Rule-Based Secondary Verification -->
+          <div class="rule-box" id="ruleBox" style="display: none;">
+            <h4><ion-icon name="shield-checkmark-outline"></ion-icon> WHO Guidelines Verification</h4>
+            <p id="ruleAssessmentText">Assessment pending...</p>
+          </div>
+
+          <!-- Raw JSON API Response Viewer -->
+          <div class="json-viewer-wrapper">
+            <button type="button" class="btn btn-sm btn-ghost" id="btnToggleJson">
+              <ion-icon name="code-slash-outline"></ion-icon> Inspect Raw JSON Response
+            </button>
+            <pre id="rawJsonResponse" class="json-code" style="display: none;"></pre>
+          </div>
+        </div>
+
+        <!-- Batch CSV Upload Dropzone -->
+        <div class="batch-upload-box">
+          <h3><ion-icon name="cloud-upload-outline"></ion-icon> Batch CSV Diagnostic Mode</h3>
+          <p>Upload a cohort CSV file to evaluate multiple patients simultaneously via the batch API.</p>
+          <div class="file-drop-area" id="dropArea">
+            <input type="file" id="csvFileInput" accept=".csv" class="file-input">
+            <label for="csvFileInput" class="file-label">
+              <ion-icon name="document-attach-outline"></ion-icon>
+              <span>Click to select CSV or drag file here</span>
+            </label>
+          </div>
+          <div id="batchResults" class="batch-results" style="display: none;"></div>
+        </div>
+
+      </div>
+
+    </div>
+  </main>
+
+  <!-- Footer -->
+  <footer class="app-footer">
+    <div>
+      <strong>CKD Clinical Diagnostic System &bull; Version 2.0.0</strong> &mdash; Built with FastAPI, XGBoost, and Scikit-Learn by Basavraj Biradar.
+    </div>
+  </footer>
+
+  <!-- App Logic JS -->
+  <script src="/static/js/app.js"></script>
+</body>
+</html>
